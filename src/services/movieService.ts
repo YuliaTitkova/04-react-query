@@ -1,24 +1,27 @@
-// Выполните функцию fetchMoviesдля выполнения HTTP-запросов в отдельный файл 
-// src/services/movieService.ts. Типизируйте ее параметры, возвращаемый
-//  результат и ответ от Axios.
+import axios from "axios";
+import type { Movie } from "../types/movie";
 
-import axios from 'axios';
-import type { Movie } from '../types/movie';
-
-const API_BASE_URL = 'https://api.themoviedb.org/3';
-const token = import.meta.env.VITE_TMDB_TOKEN;
-
-interface SearchMoviesResponse {
- results: Movie[];
+const myKey = import.meta.env.VITE_TMDB_TOKEN;
+interface MoviesResponse {
+  results: Movie[];
+  total_pages: number;
 }
+export const fetchMovies = async (
+  query: string,
+  page: number
+): Promise<MoviesResponse> => {
+  const response = await axios.get<MoviesResponse>(
+    "https://api.themoviedb.org/3/search/movie",
+    {
+      params: {
+        query: query,
+        page,
+      },
+      headers: {
+        Authorization: `Bearer ${myKey}`,
+      },
+    }
+  );
 
-export async function fetchMovies(query: string): Promise<Movie[]> {
- const response = await axios.get<SearchMoviesResponse>(`${API_BASE_URL}/search/movie`, {
-  params: { query },
-  headers: {
-   Authorization: `Bearer ${token}`,
-  },
- });
-
- return response.data.results;
-}
+  return response.data;
+};

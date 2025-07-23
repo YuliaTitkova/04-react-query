@@ -1,75 +1,72 @@
-import { useState } from "react";
-import css from "./App.module.css";
+import { useState, useEffect } from "react";
+import SearchBar from "../SearchBar/SearchBar";
+import { fetchMovies } from "../../services/movieService";
 import { Toaster, toast } from "react-hot-toast";
 import type { Movie } from "../../types/movie";
-import { fetchMovies } from "../../services/movieService";
-import SearchBar from "../SearchBar/SearchBar";
 import MovieGrid from "../MovieGrid/MovieGrid";
 import Loader from "../Loader/Loader";
 import ErrorMessage from "../ErrorMessage/ErrorMessage";
 import MovieModal from "../MovieModal/MovieModal";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import ReactPaginate from "react-paginate";
+import css from "./App.module.css";
 
 export default function App() {
-  // 1. Оголошуємо і типізуємо стан
-  const [movies, setMovies] = useState<Movie[]>([]);
-  // 2. Додаємо стан індикотора загрузки
-  const [isLoading, setIsLoading] = useState(false);
-  // Додаємо стан isError
-  const [isError, setIsError] = useState(false);
-  // Модал
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
-  const handleSubmit = async (searchValue: string) => {
-    setMovies([]); // щчищуємо попередні фільми після пового запиту
-    // 2. змінюємо індикатор на true перед запитом
-    setIsLoading(true);
-    setIsError(false);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["movies", query, page],
+    queryFn: () => fetchMovies(query, page),
+    enabled: query.trim().length > 0,
+    placeholderData: keepPreviousData,
+  });
 
-    try {
-      const fetchedMovies = await fetchMovies(searchValue);
-      if (fetchedMovies.length === 0) {
-        toast.error("No movies found for your request.");
-      }
-      // 3. Меняем индикатор на false после запроса
-      setMovies(fetchedMovies);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(`Error fetching movies: ${error.message}`);
-      } else {
-        toast.error("Error fetching movies.");
-      }
-      setIsError(true);
-    } finally {
-      setIsLoading(false);
+  const movies = data?.results ?? [];
+  const totalPages = data?.total_pages ?? 0;
+
+  useEffect(() => {
+    if (!isLoading && data && movies.length === 0) {
+      toast.error("No movies found for your request.");
     }
+  }, [isLoading, data, movies.length]);
+
+  const onSubmit = (newQuery: string) => {
+    setQuery(newQuery);
+    setPage(1);
   };
 
-  const handleSelect = (movie: Movie) => {
-    if (!movie) return; // захист від некоректних даних
+  const openModal = (movie: Movie) => {
     setSelectedMovie(movie);
   };
-
   const closeModal = () => {
     setSelectedMovie(null);
   };
-
   return (
     <>
-      <div className={css.app}>
-        <Toaster position="top-center" />
-        <SearchBar onSubmit={handleSubmit} />
-        {isLoading ? (
-          <Loader />
-        ) : (
-          movies.length > 0 && (
-            <MovieGrid onSelect={handleSelect} movies={movies} />
-          )
-        )}
-        {selectedMovie && (
-          <MovieModal movie={selectedMovie} onClose={closeModal} />
-        )}
-        {isError && <ErrorMessage />}
-      </div>
+      {selectedMovie && (
+        <MovieModal movie={selectedMovie} onClose={closeModal} />
+      )}
+      <SearchBar onSubmit={onSubmit} />
+      {totalPages > 1 && (
+        <ReactPaginate
+          pageCount={totalPages}
+          pageRangeDisplayed={5}
+          marginPagesDisplayed={1}
+          onPageChange={({ selected }) => setPage(selected + 1)}
+          forcePage={page - 1}
+          containerClassName={css.pagination}
+          activeClassName={css.active}
+          nextLabel="→"
+          previousLabel="←"
+        />
+      )}
+
+      {isLoading && <Loader />}
+      {isError && <ErrorMessage />}
+      {movies.length > 0 && <MovieGrid onSelect={openModal} movies={movies} />}
+      <Toaster />
     </>
   );
 }
